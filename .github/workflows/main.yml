@@ -1,6 +1,5 @@
 name: Test Inputs & Connectivity
 
-# Trigger manually from the GitHub UI
 on:
   workflow_dispatch:
     inputs:
@@ -30,31 +29,62 @@ on:
         default: 1
 
 jobs:
-  echo-inputs:
+  simulate-and-report:
     runs-on: ubuntu-latest
+    env:
+      CALLBACK_URL: "https://deiform-nonruminatingly-aleah.ngrok-free.dev/webhook"  # CHANGE THIS
     steps:
-      # 1. Checkout (optional, but nice to have)
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Show all inputs
-      - name: Display inputs
-        env:
-          INPUT_NAME:        ${{ inputs.name }}
-          INPUT_ENV:         ${{ inputs.environment }}
-          INPUT_DEBUG:       ${{ inputs.debug }}
-          INPUT_COUNT:       ${{ inputs.count }}
+      - name: Show Inputs
         run: |
-          echo "👋 Hello, $INPUT_NAME!"
-          echo "🌍 Environment : $INPUT_ENV"
-          echo "🔧 Debug mode  : $INPUT_DEBUG"
-          echo "🔢 Repeat count: $INPUT_COUNT"
-          echo "-----------------------------------"
+          echo "Hello, ${{ inputs.name }}!"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Debug: ${{ inputs.debug }}"
+          echo "Count: ${{ inputs.count }}"
+          echo "Starting work simulation..."
 
-      # 3. Optional: repeat the greeting N times
-      - name: Repeat greeting
+      # SIMULATE WORK (4–10 sec per task)
+      - name: Process Task
         if: inputs.count > 0
         run: |
           for i in $(seq 1 ${{ inputs.count }}); do
-            echo "[$i] Hello again, ${{ inputs.name }}! (env: ${{ inputs.environment }})"
+            echo "[$i/${{ inputs.count }}] Running task in ${{ inputs.environment }}..."
+            sleep $((4 + $RANDOM % 6))
+            echo "[$i] Task complete!"
           done
+
+      # FINAL DEPLOYMENT
+      - name: Deploy
+        run: |
+          echo "Deploying to ${{ inputs.environment }}..."
+          sleep 3
+          echo "Deployment successful! (India Time: $(date '+%I:%M %p IST'))"
+
+      # CALL YOUR API (WITH run_id, inputs, status)
+      - name: Notify API
+        run: |
+          IST_TIME=$(date '+%I:%M %p IST, %d %b %Y')
+          RUN_ID=${{ github.run_id }}
+          STATUS="success"
+
+          # If any step failed, set status to failure
+          if [ "${{ job.status }}" != "success" ]; then
+            STATUS="failure"
+          fi
+
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "run_id": "'"$RUN_ID"'",
+              "inputs": {
+                "name": "'"${{ inputs.name }}"'",
+                "environment": "'"${{ inputs.environment }}"'",
+                "debug": ${{ inputs.debug }},
+                "count": ${{ inputs.count }}
+              },
+              "status": "'"$STATUS"'",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/'"$RUN_ID"'",
+              "completed_at_ist": "'"$IST_TIME"'"
+            }' || echo "API call failed (ignored)"
