@@ -1,0 +1,112 @@
+name: Test Failure Simulation
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Your name'
+        required: true
+        type: string
+        default: 'Rohan'
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      debug:
+        description: 'Enable debug mode?'
+        required: false
+        type: boolean
+        default: false
+      count:
+        description: 'How many tasks to run before failure?'
+        required: false
+        type: number
+        default: 2
+      fail_step:
+        description: 'Which step should fail?'
+        required: true
+        type: choice
+        options:
+          - process
+          - deploy
+        default: process
+
+jobs:
+  simulate-failure:
+    runs-on: ubuntu-latest
+    env:
+      CALLBACK_URL: "https://deiform-nonruminatingly-aleah.ngrok-free.dev"  # CHANGE THIS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Inputs
+        run: |
+          echo "Hello, ${{ inputs.name }}!"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Debug: ${{ inputs.debug }}"
+          echo "Tasks: ${{ inputs.count }}"
+          echo "Fail at: ${{ inputs.fail_step }}"
+          echo "Starting failure simulation..."
+
+      # SIMULATE WORK (with delay)
+      - name: Process Tasks
+        if: inputs.count > 0
+        run: |
+          for i in $(seq 1 ${{ inputs.count }}); do
+            echo "[$i/${{ inputs.count }}] Processing in ${{ inputs.environment }}..."
+            sleep $((3 + $RANDOM % 5))  # 3–7 sec delay
+            echo "[$i] Done!"
+            
+            # FAIL on specific step
+            if [ "$i" -eq 2 ] && [ "${{ inputs.fail_step }}" = "process" ]; then
+              echo "SIMULATED FAILURE: Database connection lost!"
+              exit 1
+            fi
+          done
+
+      # DEPLOYMENT (only runs if process passed)
+      - name: Deploy
+        run: |
+          echo "Deploying to ${{ inputs.environment }}..."
+          sleep 3
+
+          # FAIL here if selected
+          if [ "${{ inputs.fail_step }}" = "deploy" ]; then
+            echo "SIMULATED FAILURE: Deployment timeout!"
+            exit 1
+          fi
+
+          echo "Deployment successful! (India Time: $(date '+%I:%M %p IST'))"
+
+      # CALL API ON SUCCESS OR FAILURE
+      - name: Notify API
+        if: always()  # Runs even if previous steps fail
+        run: |
+          IST_TIME=$(date '+%I:%M %p IST, %d %b %Y')
+          RUN_ID=${{ github.run_id }}
+          STATUS="success"
+          if [ "${{ job.status }}" != "success" ]; then
+            STATUS="failure"
+          fi
+
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "run_id": "'"$RUN_ID"'",
+              "inputs": {
+                "name": "'"${{ inputs.name }}"'",
+                "environment": "'"${{ inputs.environment }}"'",
+                "debug": ${{ inputs.debug }},
+                "count": ${{ inputs.count }},
+                "fail_step": "'"${{ inputs.fail_step }}"'"
+              },
+              "status": "'"$STATUS"'",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/'"$RUN_ID"'",
+              "completed_at_ist": "'"$IST_TIME"'"
+            }' || echo "API call failed (ignored)"
