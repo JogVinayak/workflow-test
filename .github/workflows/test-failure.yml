@@ -40,7 +40,7 @@ jobs:
   simulate-failure:
     runs-on: ubuntu-latest
     env:
-      CALLBACK_URL: "https://deiform-nonruminatingly-aleah.ngrok-free.dev"  # CHANGE THIS
+      CALLBACK_URL: "https://deiform-nonruminatingly-aleah.ngrok-free.dev/webhook"  # CHANGE THIS
     steps:
       - name: Checkout
         uses: actions/checkout@v4
