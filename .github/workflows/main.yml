@@ -1,0 +1,60 @@
+name: Test Inputs & Connectivity
+
+# Trigger manually from the GitHub UI
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Your name'
+        required: true
+        type: string
+        default: 'Friend'
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      debug:
+        description: 'Enable debug mode?'
+        required: false
+        type: boolean
+        default: false
+      count:
+        description: 'How many times to echo?'
+        required: false
+        type: number
+        default: 1
+
+jobs:
+  echo-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout (optional, but nice to have)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Show all inputs
+      - name: Display inputs
+        env:
+          INPUT_NAME:        ${{ inputs.name }}
+          INPUT_ENV:         ${{ inputs.environment }}
+          INPUT_DEBUG:       ${{ inputs.debug }}
+          INPUT_COUNT:       ${{ inputs.count }}
+        run: |
+          echo "👋 Hello, $INPUT_NAME!"
+          echo "🌍 Environment : $INPUT_ENV"
+          echo "🔧 Debug mode  : $INPUT_DEBUG"
+          echo "🔢 Repeat count: $INPUT_COUNT"
+          echo "-----------------------------------"
+
+      # 3. Optional: repeat the greeting N times
+      - name: Repeat greeting
+        if: inputs.count > 0
+        run: |
+          for i in $(seq 1 ${{ inputs.count }}); do
+            echo "[$i] Hello again, ${{ inputs.name }}! (env: ${{ inputs.environment }})"
+          done
